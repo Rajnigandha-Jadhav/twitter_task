@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from database.database import user
+from collection_op import insert,insertMany,update,delete,get,getAll
 from validations.validation import PostsSchema, UserSchema, FollowerSchema
 from bson import ObjectId
 from dataclasses import asdict
@@ -17,16 +18,22 @@ def create_user():
         user_data = request.json
         print(user_data)
         if not user_data:
-            return "Please provide the data", 400
+            resp = jsonify({'Success':False,'message': 'Please provide some data','Status':400})
+            resp.status_code = 400
+            return resp
     
         userInfo = user_schema.load(user_data)
        
-        user.insert_one(asdict(userInfo))
-        resp = jsonify({'message': 'User document saved successfully'})
+        insert(asdict(userInfo))
+        resp = jsonify({'message': 'User document saved successfully','Success':True,'Status':201})
+        
         resp.status_code = 201
         return resp
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        resp = jsonify({'Success': False, 'message': 'An error occurred: ' + str(e), 'Status': 500})
+        resp.status_code = 500
+        return resp
+
 
 
 
@@ -41,7 +48,9 @@ def upload_post(user_id):
         
 
         if not post_data:
-            return "Please provide the data", 400
+            resp = jsonify({'Success':False,'message': 'Please provide some data','Status':400})
+            resp.status_code = 400
+            return resp
         # Create a Post object using the loaded post data attributes
         postInfo = post_schema.load(post_data)
         dict1 = asdict(postInfo)
@@ -51,13 +60,15 @@ def upload_post(user_id):
         # Add the post to the "postsAdded" list of the user with the specified ID
         userDoc = user.find_one({'_id': ObjectId(user_id)})
         userDoc["postsAdded"].append(dict1["post"])
-        user.update_one({'_id': ObjectId(user_id)}, {'$set': {'postsAdded': userDoc["postsAdded"]}})
+        update({'_id': ObjectId(user_id)}, {'$set': {'postsAdded': userDoc["postsAdded"]}})
 
-        resp = jsonify({'message': 'Post added successfully'})
-        resp.status_code = 201
+        resp = jsonify({'message': 'Post added successfully','Success':True,'Status':201})
+        # resp.status_code = 201
         return resp
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        resp = jsonify({'Success': False, 'message': 'An error occurred: ' + str(e), 'Status': 500})
+        resp.status_code = 500
+        return resp
 
 
 
@@ -79,31 +90,31 @@ def follow_user(user_id):
         follower_id = dict1["follower"]
         
         # Get follower's username from follower_id
-        follower_doc = user.find_one({'_id': ObjectId(follower_id)})
+        follower_doc = get({'_id': ObjectId(follower_id)})
         if not follower_doc:
             return jsonify({'error': 'Follower not found'}), 404
         follower_name = follower_doc["userName"]
         
 
         # Add follower to user's followers list
-        user_doc = user.find_one({'_id': ObjectId(user_id)})
+        user_doc = get({'_id': ObjectId(user_id)})
         if not user_doc:
             return jsonify({'error': 'User not found'}), 404
         user_followers = user_doc["followers"]
         if follower_name not in user_followers:
             user_followers.append(follower_name)
-            user.update_one({'_id': ObjectId(user_id)}, {'$set': {'followers': user_followers}})
+            update({'_id': ObjectId(user_id)}, {'$set': {'followers': user_followers}})
 
         user_name = user_doc["userName"]
         follower_doc_following = follower_doc["following"]
         follower_doc_following.append(user_name)
-        user.update_one({'_id': ObjectId(follower_id)},{'$set':{'following':follower_doc_following}})
+        update({'_id': ObjectId(follower_id)},{'$set':{'following':follower_doc_following}})
 
 
         postsPage = user_doc["postsAdded"]
         following_posts = follower_doc["postsOnHomePage"]
         following_posts.append(postsPage)
-        user.update_one({'_id': ObjectId(follower_id)}, {'$set': {'postsOnHomePage': following_posts}})
+        update({'_id': ObjectId(follower_id)}, {'$set': {'postsOnHomePage': following_posts}})
 
         # Return success response
         resp = jsonify({'message': 'Followings added successfully'})
@@ -111,7 +122,9 @@ def follow_user(user_id):
         return resp
 
     except Exception as e:
-        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+        resp = jsonify({'Success': False, 'message': 'An error occurred: ' + str(e), 'Status': 500})
+        resp.status_code = 500
+        return resp
 
 
 
@@ -121,7 +134,7 @@ def follow_user(user_id):
 @app.route('/all-users', methods=['GET'])
 def get_users():
     try:
-        users = user.find({})
+        users = getAll({})
         user_list = []
         for user_data in users:
             user_dict = {}
@@ -132,7 +145,9 @@ def get_users():
         resp.status_code = 200
         return resp
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        resp = jsonify({'Success': False, 'message': 'An error occurred: ' + str(e), 'Status': 500})
+        resp.status_code = 500
+        return resp
 
 
 
@@ -143,7 +158,7 @@ def get_users():
 @app.route('/one-user/<string:user_id>', methods=['GET'])
 def get_a_user(user_id):
     try:
-        user_data = user.find_one({'_id': ObjectId(user_id)})
+        user_data = get({'_id': ObjectId(user_id)})
         user_dict = {
             'followers': user_data['followers'],
             'following': user_data['following']
@@ -152,7 +167,9 @@ def get_a_user(user_id):
         resp.status_code = 200
         return resp
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        resp = jsonify({'Success': False, 'message': 'An error occurred: ' + str(e), 'Status': 500})
+        resp.status_code = 500
+        return resp
     
 
 
@@ -163,7 +180,7 @@ def get_a_user(user_id):
 @app.route('/show-posts/<string:user_id>', methods=['GET'])
 def get_user_info(user_id):
     try:
-        user_data = user.find_one({'_id': ObjectId(user_id)})
+        user_data = get({'_id': ObjectId(user_id)})
         user_dict = {
             'postsAdded': user_data['postsAdded'],
             'postsOnHomePage': user_data['postsOnHomePage']
@@ -172,7 +189,9 @@ def get_user_info(user_id):
         resp.status_code = 200
         return resp
     except Exception as e:
-        return f"An error occurred: {str(e)}", 500
+        resp = jsonify({'Success': False, 'message': 'An error occurred: ' + str(e), 'Status': 500})
+        resp.status_code = 500
+        return resp
 
 
 

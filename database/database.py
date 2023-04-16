@@ -14,6 +14,7 @@ User = os.environ.get('COLLECTION_NAME_User')
 
 
 
+
 client = MongoClient(MONGODB_URI)
 db = client[DB_NAME]
 user = db.User
